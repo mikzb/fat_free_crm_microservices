@@ -19,6 +19,14 @@ class UsersController < ApplicationController
   #----------------------------------------------------------------------------
   def show
     @user = current_user if params[:id].nil?
+
+    # Feature flag to gradually migrate
+    if use_user_service? && @user.id != current_user.id
+      service_response = user_service.find_user(@user.id)
+      if service_response
+        @user_data = service_response['data']['attributes']
+      end
+    end
     respond_with(@user)
   end
 
@@ -32,9 +40,23 @@ class UsersController < ApplicationController
   # PUT /users/1.js
   #----------------------------------------------------------------------------
   def update
-    @user.update(user_params)
-    flash[:notice] = t(:msg_user_updated)
-    respond_with(@user)
+    if use_user_service?
+      service_response = user_service.update_user(@user.id, user_params)
+      if service_response && service_response['data']
+        flash[:notice] = t(:msg_user_updated)
+        respond_with(@user)
+      else
+        # Handle service failure - fallback included in service
+        @user.update(user_params)
+        flash[:notice] = t(:msg_user_updated)
+        respond_with(@user)
+      end
+    else
+      # Original logic
+      @user.update(user_params)
+      flash[:notice] = t(:msg_user_updated)
+      respond_with(@user)
+    end
   end
 
   # GET /users/1/avatar
@@ -110,17 +132,39 @@ class UsersController < ApplicationController
   end
 
   def auto_complete
-    @query = params[:term] || ''
-    @users = User.my(current_user).text_search(@query).limit(10).order(:first_name, :last_name)
+    if use_user_service?
+      query = params[:term] || ''
+      results = user_service.auto_complete_users(query)
 
-    respond_to do |format|
-      format.json do
-        results = @users.map do |a|
-          helpers.j(a.full_name + " (@" + a.username + ")")
+      respond_to do |format|
+        format.json { render json: results }
+      end
+    else
+      # Original logic
+      @query = params[:term] || ''
+      @users = User.my(current_user).text_search(@query).limit(10).order(:first_name, :last_name)
+
+      respond_to do |format|
+        format.json do
+          results = @users.map do |a|
+            helpers.j(a.full_name + " (@" + a.username + ")")
+          end
+          render json: results
         end
-        render json: results
       end
     end
+  end
+
+  private
+
+  # Can use UserServiceClientWithFallback if you want to handle fallback logic
+  def user_service
+    @user_service ||= UserServiceClientWithFallback.new
+  end
+
+  def use_user_service?
+    # Feature flag - start with false, gradually enable
+    ENV['USE_USER_SERVICE'] == 'true' || params[:use_service] == 'true'
   end
 
   protected
