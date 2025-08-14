@@ -1,17 +1,11 @@
 class UserServiceClientWithFallback
+  include CircuitBreaker
 
   def initialize
-    @circuit_breaker = CircuitBreaker.new do |cb|
-      cb.failure_threshold = 3
-      cb.recovery_timeout = 30
-      cb.expected_exception = StandardError
-    end
   end
 
   def find_user(id)
-    @circuit_breaker.call do
-      UserServiceClient.find_user(id)
-    end
+    call_user_service_find(id)
   rescue => e
     Rails.logger.error "User service failed, falling back to direct DB: #{e.message}"
     # Fallback to direct database access
@@ -20,9 +14,7 @@ class UserServiceClientWithFallback
   end
 
   def update_user(id, params)
-    @circuit_breaker.call do
-      UserServiceClient.update_user(id, params)
-    end
+    call_user_service_update(id, params)
   rescue => e
     Rails.logger.error "User service failed for update: #{e.message}"
     # Fallback to original controller logic
@@ -33,6 +25,14 @@ class UserServiceClientWithFallback
 
   private
 
+  def call_user_service_find(id)
+    UserServiceClient.find_user(id)
+  end
+
+  def call_user_service_update(id, params)
+    UserServiceClient.update_user(id, params)
+  end
+
   def format_user_response(user)
     {
       'data' => {
@@ -40,5 +40,16 @@ class UserServiceClientWithFallback
         'attributes' => user.attributes
       }
     }
+  end
+
+  # Configure circuit breaker for the service calls
+  circuit_method :call_user_service_find
+  circuit_method :call_user_service_update
+
+  # Optional configuration
+  circuit_handler do |handler|
+    handler.failure_threshold = 3
+    handler.failure_timeout = 30
+    handler.excluded_exceptions = [] # Add any exceptions that shouldn't trigger the circuit
   end
 end

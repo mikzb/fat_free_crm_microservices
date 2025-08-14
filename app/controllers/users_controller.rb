@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require_relative '../services/user_service_client'
+require_relative '../services/user_service_client_fallback'
+
+
 # Copyright (c) 2008-2013 Michael Dvorkin and contributors.
 #
 # Fat Free CRM is freely distributable under the terms of MIT license.
@@ -157,7 +161,7 @@ class UsersController < ApplicationController
 
   private
 
-  # Can use UserServiceClientWithFallback if you want to handle fallback logic
+  # Can use UserServiceClientWithFallback or UserServiceClient directly
   def user_service
     @user_service ||= UserServiceClientWithFallback.new
   end
