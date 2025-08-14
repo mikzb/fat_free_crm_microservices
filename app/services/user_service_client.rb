@@ -1,7 +1,7 @@
 class UserServiceClient
   include HTTParty
 
-  base_uri ENV.fetch('USER_SERVICE_URL', 'http://localhost:4000')
+  base_uri ENV.fetch('USER_SERVICE_URL', 'http://localhost:3001')
 
   def self.find_user(id)
     response = get("/api/v1/users/#{id}")
