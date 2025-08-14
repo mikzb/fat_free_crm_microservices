@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../services/user_service_client'
-require_relative '../services/user_service_client_fallback'
+require_relative '../services/user_service_client_with_fallback'
 
 
 # Copyright (c) 2008-2013 Michael Dvorkin and contributors.
