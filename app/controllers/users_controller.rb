@@ -25,7 +25,7 @@ class UsersController < ApplicationController
     @user = current_user if params[:id].nil?
 
     # Feature flag to gradually migrate
-    if use_user_service? && @user.id != current_user.id
+    if use_user_service?
       service_response = user_service.find_user(@user.id)
       if service_response
         @user_data = service_response['data']['attributes']
@@ -49,11 +49,6 @@ class UsersController < ApplicationController
       if service_response && service_response['data']
         flash[:notice] = t(:msg_user_updated)
         respond_with(@user)
-      else
-        # Handle service failure - fallback included in service
-        @user.update(user_params)
-        flash[:notice] = t(:msg_user_updated)
-        respond_with(@user)
       end
     else
       # Original logic
@@ -74,22 +69,43 @@ class UsersController < ApplicationController
   # PUT /users/1/upload_avatar.js
   #----------------------------------------------------------------------------
   def upload_avatar
-    if params[:gravatar]
-      @user.avatar = nil
-      @user.save
-      render
-    else
-      if params[:avatar]
-        @avatar = Avatar.create(avatar_params)
-        if @avatar.valid?
-          @user.avatar = @avatar
-        else
-          @user.avatar.errors.clear
-          @user.avatar.errors.add(:image, t(:msg_bad_image_file))
+    if use_user_service?
+      if params[:gravatar]
+        user_service.upload_avatar(@user.id, use_gravatar: true)
+        render
+      else
+        if params[:avatar]
+          file = params[:avatar][:image] || params[:avatar]
+          result = user_service.upload_avatar(@user.id, file: file, use_gravatar: false)
+          if result.is_a?(Hash) && result['status'] == 'error'
+            @user.avatar ||= Avatar.new
+            @user.avatar.errors.clear
+            @user.avatar.errors.add(:image, t(:msg_bad_image_file))
+          end
+        end
+        responds_to_parent do
+          render
         end
       end
-      responds_to_parent do
+    else
+      # Original logic
+      if params[:gravatar]
+        @user.avatar = nil
+        @user.save
         render
+      else
+        if params[:avatar]
+          @avatar = Avatar.create(avatar_params)
+          if @avatar.valid?
+            @user.avatar = @avatar
+          else
+            @user.avatar.errors.clear
+            @user.avatar.errors.add(:image, t(:msg_bad_image_file))
+          end
+        end
+        responds_to_parent do
+          render
+        end
       end
     end
   end
@@ -105,20 +121,40 @@ class UsersController < ApplicationController
   # PUT /users/1/change_password.js
   #----------------------------------------------------------------------------
   def change_password
-    if @user.valid_password?(params[:current_password])
-      if params[:user][:password].blank?
+    if use_user_service?
+      service_response = user_service.change_password(
+        @user.id,
+        current_password: params[:current_password],
+        password: params.dig(:user, :password),
+        password_confirmation: params.dig(:user, :password_confirmation)
+      )
+
+      case service_response && service_response['status']
+      when 'ok'
+        flash[:notice] = t(:msg_password_changed)
+      when 'noop'
         flash[:notice] = t(:msg_password_not_changed)
       else
-        @user.password = params[:user][:password]
-        @user.password_confirmation = params[:user][:password_confirmation]
-        @user.save
-        flash[:notice] = t(:msg_password_changed)
+        @user.errors.add(:current_password, t(:msg_invalid_password)) if service_response&.dig('errors', 'current_password')
       end
-    else
-      @user.errors.add(:current_password, t(:msg_invalid_password))
-    end
 
-    respond_with(@user)
+      respond_with(@user)
+    else
+      if @user.valid_password?(params[:current_password])
+        if params[:user][:password].blank?
+          flash[:notice] = t(:msg_password_not_changed)
+        else
+          @user.password = params[:user][:password]
+          @user.password_confirmation = params[:user][:password_confirmation]
+          @user.save
+          flash[:notice] = t(:msg_password_changed)
+        end
+      else
+        @user.errors.add(:current_password, t(:msg_invalid_password))
+      end
+
+      respond_with(@user)
+    end
   end
 
   # GET /users/1/redraw

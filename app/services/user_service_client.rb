@@ -21,6 +21,45 @@ class UserServiceClient
     handle_response(response)
   end
 
+  def self.change_password(id, current_password:, password:, password_confirmation:)
+    response = put("/api/v1/users/#{id}/change_password",
+                   body: {
+                     current_password: current_password,
+                     password: password,
+                     password_confirmation: password_confirmation
+                   }.to_json,
+                   headers: { 'Content-Type' => 'application/json' }
+    )
+    handle_response(response)
+  end
+
+  # New: set/update user preferences (locale)
+  def self.set_locale(id, locale:)
+    response = put("/api/v1/users/#{id}/preferences",
+                   body: { preference: { locale: locale } }.to_json,
+                   headers: { 'Content-Type' => 'application/json' }
+    )
+    handle_response(response)
+  end
+
+  # New: upload avatar or toggle gravatar
+  # If use_gravatar is true, service should switch to gravatar; otherwise upload file in multipart
+  def self.upload_avatar(id, file: nil, use_gravatar: false)
+    if use_gravatar
+      response = put("/api/v1/users/#{id}/avatar",
+                     body: { gravatar: true }.to_json,
+                     headers: { 'Content-Type' => 'application/json' }
+      )
+    else
+      # Multipart upload; HTTParty will set the proper multipart boundary for File instances
+      response = post("/api/v1/users/#{id}/avatar",
+                      body: { avatar: file },
+                      headers: { 'Content-Type' => 'multipart/form-data' }
+      )
+    end
+    handle_response(response)
+  end
+
   private
 
   def self.handle_response(response)
