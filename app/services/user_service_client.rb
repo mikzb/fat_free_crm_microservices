@@ -45,18 +45,18 @@ class UserServiceClient
   # New: upload avatar or toggle gravatar
   # If use_gravatar is true, service should switch to gravatar; otherwise upload file in multipart
   def self.upload_avatar(id, file: nil, use_gravatar: false)
-    if use_gravatar
-      response = put("/api/v1/users/#{id}/avatar",
-                     body: { gravatar: true }.to_json,
-                     headers: { 'Content-Type' => 'application/json' }
+    response = if use_gravatar
+      put("/api/v1/users/#{id}/avatar",
+          body: { gravatar: true }.to_json,
+          headers: { 'Content-Type' => 'application/json' }
       )
     else
       # Multipart upload; HTTParty will set the proper multipart boundary for File instances
-      response = post("/api/v1/users/#{id}/avatar",
-                      body: { avatar: file },
-                      headers: { 'Content-Type' => 'multipart/form-data' }
+      post("/api/v1/users/#{id}/avatar",
+           body: { avatar: file },
+           headers: { 'Content-Type' => 'multipart/form-data' }
       )
-    end
+               end
     handle_response(response)
   end
 
