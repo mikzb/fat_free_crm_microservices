@@ -115,3 +115,7 @@ gem 'circuit_breaker' # for handling service outages gracefully
 
 # Workaround problems from concurrent-ruby 1.3.5
 require "logger"
+
+gem "dockerfile-rails", ">= 1.7", :group => :development
+
+gem "dockerfile-rails", ">= 1.7", :group => :development
