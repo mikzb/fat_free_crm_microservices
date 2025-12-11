@@ -13,11 +13,27 @@ class OpportunitiesController < EntitiesController
   # GET /opportunities
   #----------------------------------------------------------------------------
   def index
-    @opportunities = get_opportunities(page: page_param, per_page: per_page_param)
+    # ---------------------------------------------------------
+    # STRANGLER PATTERN: INTERCEPT THE CALL
+    # ---------------------------------------------------------
+    # Old Code:
+    # @opportunities = get_opportunities(page: page_param, per_page: per_page_param)
+
+    # New Code (The Experiment):
+    # We fetch from the Microservice using our Proxy
+    @opportunities = DealFlow::OpportunityProxy.all_for_user(current_user)
+
+    # Note: Pagination is tricky with APIs. For the demo, we might skip pagination
+    # or handle it manually. The view usually expects a WillPaginate object.
+    # To fix the view crashing on pagination, we can fake it:
+    @opportunities = WillPaginate::Collection.create(params[:page] || 1, 20, @opportunities.length) do |pager|
+      start_index = (pager.current_page - 1) * pager.per_page
+      pager.replace(@opportunities[start_index, pager.per_page] || [])
+    end
 
     respond_with @opportunities do |format|
-      format.xls { render layout: 'header' }
-      format.csv { render csv: @opportunities }
+      format.html { render layout: 'application' }
+      format.csv  { render csv: @opportunities }
     end
   end
 
