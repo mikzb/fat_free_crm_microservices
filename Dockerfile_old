@@ -1,8 +1,3 @@
-# Usage:
-# docker volume create pgdata
-# docker volume create gems
-# docker-compose up
-# docker-compose exec web bundle exec rake db:create db:schema:load ffcrm:demo:load
 FROM ruby:3.3
 
 LABEL author="Steve Kenworthy"
@@ -11,52 +6,22 @@ ENV HOME /home/app
 RUN mkdir -p $HOME
 WORKDIR $HOME
 
-# Copy Gemfile and Gemfile.lock first for better caching
-COPY Gemfile Gemfile.lock ./
-
 ADD . $HOME
 
 RUN apt-get update && \
-    apt-get install -y \
-    imagemagick \
-    tzdata \
-    default-libmysqlclient-dev \
-    mariadb-server \
-    pkg-config \
-    && apt-get autoremove -y \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean \
+apt-get install -y imagemagick tzdata default-libmysqlclient-dev mariadb-server mariadb-client libpq-dev && \
+apt-get autoremove -y \
 
-RUN cp config/database.mysql.docker.yml config/database.yml \
+RUN cp config/database.mysql.docker.yml config/database.yml
 
 RUN gem install bundler && \
-    bundle config set --local deployment 'true' && \
-    bundle install --deployment --jobs $(nproc) --retry 3 \
-    && bundle exec rails assets:precompile
+bundle config set --local deployment 'true' && \
+bundle install
 
-CMD ["bundle","exec","rails","s","-b","0.0.0.0"]
+
+
+CMD ["bundle","exec","rails","s"]
+
+
 
 EXPOSE 3000
-
-# # Usage:
-# # docker volume create pgdata
-# # docker volume create gems
-# # docker-compose up
-# # docker-compose exec web bundle exec rake db:create db:schema:load ffcrm:demo:load assets:precompile
-
-# FROM phusion/passenger-ruby24
-# MAINTAINER Steve Kenworthy
-
-# ENV HOME /home/app
-
-# ADD . /home/app
-# WORKDIR /home/app
-
-# RUN apt-get update \
-#   && apt-get install -y imagemagick firefox tzdata \
-#   && apt-get autoremove -y \
-#   && cp config/database.postgres.docker.yml config/database.yml \
-#   && chown -R app:app /home/app \
-#   && rm -f /etc/service/nginx/down /etc/nginx/sites-enabled/default \
-#   && cp .docker/nginx/sites-enabled/ffcrm.conf /etc/nginx/sites-enabled/ffcrm.conf \
-#   && bundle install --deployment

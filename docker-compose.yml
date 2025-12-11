@@ -1,0 +1,84 @@
+# This file defines your multi-container development environment
+version: '3.8'
+
+services:
+  # The database service
+  db:
+    image: mysql:8.0
+
+    command: --default-authentication-plugin=caching_sha2_password
+
+    # Set environment variables for the MySQL container
+    environment:
+      MYSQL_ROOT_PASSWORD: password  # Root password (for admin)
+      MYSQL_DATABASE: crm_development
+      MYSQL_USER: crm_user             # Create a dedicated app user
+      MYSQL_PASSWORD: crm_password     # Set the app user's password
+    ports:
+      # We map host port 3307 to container port 3306
+      # local MySQL can keep using host port 3306
+      - '3307:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # Add the service to our custom network
+    networks:
+      - crm-net
+    # Add a healthcheck to ensure MySQL is ready
+    healthcheck:
+      # Use CMD-SHELL to properly expand the container's env vars
+      # This command pings the server as the app user.
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$$MYSQL_USER -p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+# Main service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Update depends_on to wait for the db to be 'healthy'
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "
+        
+        # This prevents 'A server is already running' errors on restart.
+        rm -f tmp/pids/server.pid
+        echo 'Copying database config...'
+        cp config/database.mysql.docker.yml config/database.yml
+      
+
+        echo 'Database is healthy! Running setup...'
+      
+        # load schema to avoid migration errors (unsupported commands from old versions)
+        bundle exec rails db:schema:load
+      
+        # We can now seed the demo data
+        bundle exec rails ffcrm:demo:load
+
+        echo 'Setup complete! Starting Rails server...'
+        bundle exec rails s -b 0.0.0.0 -p 3000
+      "
+    volumes:
+      - .:/home/app
+      - /home/app/vendor/bundle
+      - /home/app/tmp
+      - /home/app/log
+    ports:
+      - '3000:3000'
+    environment:
+      DB_HOST: db
+      DB_NAME: crm_development
+      DB_USER: crm_user
+      DB_PASSWORD: crm_password
+    # Add the service to our custom network
+    networks:
+      - crm-net
+
+volumes:
+  mysql_data:
+
+networks:
+  crm-net:

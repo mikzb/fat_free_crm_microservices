@@ -5,6 +5,7 @@
 /.gitignore
 
 # Ignore bundler config.
+vendor/bundle
 /.bundle
 
 # Ignore all environment files.
