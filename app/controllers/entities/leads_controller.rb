@@ -10,13 +10,32 @@ class LeadsController < EntitiesController
   autocomplete :account, :name, full: true
 
   # GET /leads
-  #----------------------------------------------------------------------------
   def index
-    @leads = get_leads(page: page_param)
+    # -----------------------------------------------------
+    # STRANGLER PATTERN START
+    # -----------------------------------------------------
+
+    # OLD CODE:
+    # @leads = get_leads(page: page_param)
+
+    # NEW CODE:
+    # 1. Fetch from Microservice
+    raw_leads = Acquisition::LeadProxy.all_for_user(current_user)
+
+    # 2. Fake Pagination (using WillPaginate instead of Kaminari)
+    @leads = WillPaginate::Collection.create(params[:page] || 1, 20, raw_leads.length) do |pager|
+      start = (pager.current_page - 1) * pager.per_page
+      pager.replace(raw_leads[start, pager.per_page] || [])
+    end
+
+    # -----------------------------------------------------
+    # STRANGLER PATTERN END
+    # -----------------------------------------------------
 
     respond_with @leads do |format|
-      format.xls { render layout: 'header' }
-      format.csv { render csv: @leads }
+      format.html { render layout: 'application' } # Ensure CSS loads!
+      format.csv  { render csv: @leads }
+      format.js   { render :index } # AJAX support
     end
   end
 
